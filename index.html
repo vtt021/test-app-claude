@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Sổ gạo">
+<meta name="theme-color" content="#0f3d2e">
+<title>Sổ gạo</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<style>
+  :root{
+    --felt:#0f3d2e;          /* nền bàn chơi */
+    --felt-2:#0b3024;
+    --paper:#f7f4ec;         /* mặt giấy của bảng */
+    --paper-edge:#e7e1d2;
+    --ink:#1c2620;           /* chữ chính */
+    --ink-soft:#5f6b62;
+    --brass:#c8a24b;         /* nhấn chính (như chip casino) */
+    --brass-dk:#a9863a;
+    --pos:#1e7a4f;           /* điểm dương */
+    --neg:#c0392b;           /* điểm âm */
+    --line:#ddd6c6;
+    --shadow:0 8px 24px rgba(0,0,0,.28);
+    --r:16px;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    --safe-b:env(safe-area-inset-bottom,0px);
+    --safe-t:env(safe-area-inset-top,0px);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;}
+  body{
+    font-family:var(--sans);
+    color:var(--ink);
+    background:
+      radial-gradient(120% 60% at 50% -10%, #16523c 0%, var(--felt) 45%, var(--felt-2) 100%);
+    -webkit-text-size-adjust:100%;
+    overflow:hidden;
+  }
+  body, button, input{font-size:16px;}
+
+  /* ---------- App shell ---------- */
+  #app{display:flex;flex-direction:column;height:100%;}
+
+  header.page-head{
+    padding:calc(var(--safe-t) + 12px) 16px 12px;
+    color:#fff;
+    flex:0 0 auto;
+  }
+  .head-row{display:flex;align-items:center;gap:10px;}
+  .brand{font-weight:800;letter-spacing:.3px;font-size:20px;display:flex;align-items:center;gap:8px;}
+  .brand .chip{width:22px;height:22px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%,#f4d98a,var(--brass) 60%,var(--brass-dk));
+    border:2px dashed rgba(255,255,255,.55);flex:0 0 auto;}
+  .page-name{font-size:14px;color:rgba(255,255,255,.8);margin-top:2px;}
+  .head-spacer{flex:1;}
+  .icon-btn{
+    background:rgba(255,255,255,.12);border:none;color:#fff;border-radius:12px;
+    height:38px;min-width:38px;padding:0 10px;display:inline-flex;align-items:center;gap:6px;
+    font-weight:600;font-size:13px;cursor:pointer;
+  }
+  .icon-btn:active{background:rgba(255,255,255,.22);}
+
+  /* players bar */
+  .players{
+    display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px;
+  }
+  .player{
+    background:rgba(255,255,255,.1);border-radius:12px;padding:8px 6px;text-align:center;
+    color:#fff;overflow:hidden;
+  }
+  .player .pname{font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .player .ptot{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:15px;margin-top:2px;color:rgba(255,255,255,.85);}
+
+  /* ---------- Scroll body ---------- */
+  main{flex:1 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:8px 12px 16px;}
+
+  .empty{
+    color:rgba(255,255,255,.85);text-align:center;margin-top:18vh;padding:0 24px;
+  }
+  .empty .big{font-size:54px;}
+  .empty h2{margin:8px 0 6px;font-weight:700;}
+  .empty p{margin:0 0 18px;color:rgba(255,255,255,.7);line-height:1.5;}
+
+  /* ---------- Table card ---------- */
+  .tcard{
+    background:var(--paper);
+    border-radius:var(--r);
+    box-shadow:var(--shadow);
+    margin:12px 0;
+    overflow:hidden;
+    border:1px solid var(--paper-edge);
+  }
+  .tcard.active{box-shadow:0 0 0 2px var(--brass), var(--shadow);}
+  .thead{
+    display:flex;align-items:center;gap:8px;padding:11px 12px;
+    background:linear-gradient(#fff,#f1ece0);cursor:pointer;user-select:none;
+    border-bottom:1px solid var(--line);
+  }
+  .thead .chev{transition:transform .2s;color:var(--ink-soft);flex:0 0 auto;}
+  .tcard.collapsed .thead{border-bottom:none;}
+  .tcard.collapsed .chev{transform:rotate(-90deg);}
+  .ttitle{font-weight:800;font-size:15px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .tmeta{font-size:12px;color:var(--ink-soft);font-family:var(--mono);}
+  .thead .mini{
+    background:var(--felt);color:#fff;border:none;border-radius:9px;height:30px;width:34px;
+    font-size:18px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;
+  }
+  .thead .mini.ghost{background:transparent;color:var(--ink-soft);}
+  .thead .mini:active{opacity:.7;}
+
+  .grid-row{display:grid;grid-template-columns:38px repeat(4,1fr);align-items:stretch;}
+  .col-head{
+    font-size:12px;font-weight:700;color:var(--ink-soft);text-align:center;
+    padding:7px 2px;background:#efe9db;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    border-bottom:1px solid var(--line);
+  }
+  .col-head.idx{color:#b9b09a;}
+
+  .erow{cursor:pointer;border-bottom:1px solid var(--line);}
+  .erow:active{background:#f0eadc;}
+  .cell{
+    padding:9px 4px;text-align:center;font-family:var(--mono);font-variant-numeric:tabular-nums;
+    font-size:16px;font-weight:600;display:flex;align-items:center;justify-content:center;
+  }
+  .cell.idx{flex-direction:column;color:#b3aa94;font-size:12px;gap:1px;}
+  .cell.idx .coef{
+    background:var(--brass);color:#3a2c08;border-radius:6px;font-size:10px;padding:0 4px;font-weight:800;
+  }
+  .v-pos{color:var(--pos);}
+  .v-neg{color:var(--neg);}
+  .v-zero{color:#b3aa94;}
+
+  .trow-total{background:#efe9db;border-top:2px solid var(--ink);}
+  .trow-total .cell{font-weight:800;}
+  .trow-total .cell.idx{color:var(--ink);font-weight:800;font-size:13px;}
+
+  .no-rows{padding:16px;text-align:center;color:var(--ink-soft);font-size:13px;}
+
+  /* ---------- Bottom menu ---------- */
+  nav.menu{
+    flex:0 0 auto;
+    display:grid;grid-template-columns:repeat(5,1fr);gap:2px;
+    background:rgba(8,30,22,.96);
+    backdrop-filter:saturate(1.4) blur(8px);
+    padding:8px 8px calc(8px + var(--safe-b));
+    border-top:1px solid rgba(255,255,255,.08);
+  }
+  nav.menu button{
+    background:none;border:none;color:rgba(255,255,255,.82);
+    display:flex;flex-direction:column;align-items:center;gap:3px;
+    font-size:10.5px;font-weight:600;line-height:1.15;cursor:pointer;padding:5px 2px;border-radius:12px;
+  }
+  nav.menu button svg{width:24px;height:24px;}
+  nav.menu button:active{background:rgba(255,255,255,.08);}
+  nav.menu button.primary{color:#fff;}
+  nav.menu button.primary .ico{
+    background:radial-gradient(circle at 35% 30%,#f4d98a,var(--brass) 60%,var(--brass-dk));
+    color:#3a2c08;border-radius:50%;width:42px;height:42px;display:flex;align-items:center;justify-content:center;
+    margin-top:-14px;box-shadow:0 4px 12px rgba(0,0,0,.35);
+  }
+  nav.menu button.primary .ico svg{width:24px;height:24px;}
+
+  /* ---------- Modal ---------- */
+  .scrim{
+    position:fixed;inset:0;background:rgba(6,20,15,.55);backdrop-filter:blur(2px);
+    display:flex;align-items:flex-end;justify-content:center;z-index:50;
+    opacity:0;pointer-events:none;transition:opacity .18s;
+  }
+  .scrim.show{opacity:1;pointer-events:auto;}
+  .sheet{
+    width:100%;max-width:560px;background:var(--paper);border-radius:22px 22px 0 0;
+    padding:18px 18px calc(18px + var(--safe-b));max-height:90vh;overflow-y:auto;
+    transform:translateY(20px);transition:transform .2s;box-shadow:0 -10px 40px rgba(0,0,0,.4);
+  }
+  .scrim.show .sheet{transform:translateY(0);}
+  .sheet h3{margin:2px 0 14px;font-size:19px;}
+  .sheet .sub{color:var(--ink-soft);font-size:13px;margin:-8px 0 14px;}
+
+  .field{margin-bottom:12px;}
+  .field label{display:block;font-size:13px;font-weight:700;margin-bottom:6px;color:var(--ink-soft);}
+  .field input.text{
+    width:100%;border:1.5px solid var(--line);border-radius:12px;padding:12px 14px;font-size:16px;
+    background:#fff;color:var(--ink);
+  }
+  .field input.text:focus{outline:none;border-color:var(--brass);}
+
+  /* score input rows */
+  .score-line{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+  .score-line .nm{flex:1;font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .stepper{display:flex;align-items:center;gap:0;border:1.5px solid var(--line);border-radius:12px;overflow:hidden;background:#fff;}
+  .stepper .sign{
+    width:42px;height:46px;border:none;background:#efe9db;font-size:22px;font-weight:800;color:var(--ink);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .stepper .sign.minus{background:#f6dcd7;color:var(--neg);}
+  .stepper input{
+    width:74px;height:46px;border:none;text-align:center;font-family:var(--mono);font-size:18px;font-weight:700;
+    background:#fff;color:var(--ink);
+  }
+  .stepper input:focus{outline:none;}
+  .coef-line{display:flex;align-items:center;gap:10px;margin:2px 0 14px;
+    background:#efe9db;border-radius:12px;padding:10px 12px;}
+  .coef-line .nm{flex:1;font-weight:700;}
+  .coef-line input{width:84px;height:44px;border:1.5px solid var(--line);border-radius:10px;text-align:center;
+    font-family:var(--mono);font-size:18px;font-weight:700;background:#fff;}
+  .coef-line input:focus{outline:none;border-color:var(--brass);}
+
+  .balance{
+    text-align:center;border-radius:12px;padding:10px;font-weight:800;font-size:15px;margin:6px 0 14px;
+    font-family:var(--mono);
+  }
+  .balance.ok{background:#e3f3ea;color:var(--pos);}
+  .balance.bad{background:#fbe4e0;color:var(--neg);}
+
+  .btn-row{display:flex;gap:10px;margin-top:6px;}
+  .btn{flex:1;border:none;border-radius:14px;padding:14px;font-size:16px;font-weight:800;cursor:pointer;}
+  .btn.primary{background:var(--felt);color:#fff;}
+  .btn.primary:disabled{background:#cfc8b8;color:#fff;}
+  .btn.ghost{background:#ece6d8;color:var(--ink);}
+  .btn.danger{background:#fbe4e0;color:var(--neg);flex:0 0 auto;width:52px;font-size:20px;padding:14px 0;}
+
+  /* totals list */
+  .tot-list{display:flex;flex-direction:column;gap:8px;margin-bottom:10px;}
+  .tot-item{display:flex;align-items:center;gap:12px;background:#efe9db;border-radius:12px;padding:12px 14px;}
+  .tot-item .rk{width:26px;height:26px;border-radius:50%;background:var(--brass);color:#3a2c08;
+    display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;flex:0 0 auto;}
+  .tot-item .nm{flex:1;font-weight:700;}
+  .tot-item .vl{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:20px;font-weight:800;}
+  .tot-foot{text-align:center;font-size:12px;color:var(--ink-soft);margin:4px 0 14px;font-family:var(--mono);}
+
+  /* history list */
+  .hist{display:flex;flex-direction:column;gap:8px;margin-bottom:14px;}
+  .hist-item{display:flex;align-items:center;gap:10px;border:1.5px solid var(--line);border-radius:14px;padding:12px;}
+  .hist-item.cur{border-color:var(--brass);background:#fdf8ec;}
+  .hist-item .info{flex:1;min-width:0;}
+  .hist-item .ht{font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .hist-item .hs{font-size:12px;color:var(--ink-soft);margin-top:2px;font-family:var(--mono);}
+  .hist-item .open{background:var(--felt);color:#fff;border:none;border-radius:10px;padding:9px 12px;font-weight:700;font-size:13px;}
+  .hist-item .del{background:#fbe4e0;color:var(--neg);border:none;border-radius:10px;width:40px;height:40px;font-size:18px;flex:0 0 auto;}
+  .hist-cur-tag{font-size:11px;color:var(--brass-dk);font-weight:800;}
+
+  .backup-row{display:flex;gap:8px;border-top:1px solid var(--line);padding-top:14px;}
+  .backup-row .btn{font-size:14px;padding:12px;}
+
+  /* toast */
+  #toast{
+    position:fixed;left:50%;bottom:calc(96px + var(--safe-b));transform:translateX(-50%) translateY(12px);
+    background:#1c2620;color:#fff;padding:11px 18px;border-radius:30px;font-weight:700;font-size:14px;
+    opacity:0;pointer-events:none;transition:.22s;z-index:80;box-shadow:var(--shadow);white-space:nowrap;
+  }
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+  @media (prefers-reduced-motion: reduce){*{transition:none!important;}}
+
+  /* ---------- Splash ---------- */
+  #splash{
+    position:fixed;inset:0;z-index:200;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:22px;
+    background:radial-gradient(120% 80% at 50% 34%, #1c6749 0%, #11432f 55%, #0a2c1f 100%);
+    transition:opacity .45s ease;
+  }
+  #splash.hide{opacity:0;pointer-events:none;}
+  #splash .logo{width:148px;height:148px;filter:drop-shadow(0 12px 28px rgba(0,0,0,.4));animation:rise .6s ease both;}
+  #splash .word{color:#fff;font-size:30px;font-weight:800;letter-spacing:.5px;animation:rise .6s .08s ease both;}
+  #splash .tag{color:rgba(255,255,255,.6);font-size:13px;margin-top:-12px;animation:rise .6s .16s ease both;}
+  #splash .dots{display:flex;gap:7px;margin-top:6px;}
+  #splash .dots i{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.45);animation:blink 1s infinite;}
+  #splash .dots i:nth-child(2){animation-delay:.2s;}
+  #splash .dots i:nth-child(3){animation-delay:.4s;}
+  @keyframes rise{from{opacity:0;transform:translateY(14px) scale(.96);}to{opacity:1;transform:none;}}
+  @keyframes blink{0%,100%{opacity:.3;}50%{opacity:1;}}
+  @media (prefers-reduced-motion: reduce){#splash *{animation:none!important;}}
+</style>
+</head>
+<body>
+<div id="splash">
+  <svg class="logo" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="sCover" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#f59a2e"/><stop offset="100%" stop-color="#e07414"/>
+      </linearGradient>
+      <linearGradient id="sPage" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#fffdf6"/><stop offset="100%" stop-color="#f1e6cf"/>
+      </linearGradient>
+      <linearGradient id="sGrain" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#ffffff"/><stop offset="100%" stop-color="#f3e7cc"/>
+      </linearGradient>
+    </defs>
+    <ellipse cx="262" cy="404" rx="150" ry="30" fill="#000000" opacity="0.18"/>
+    <g transform="rotate(-7 256 256)">
+      <rect x="156" y="118" width="214" height="286" rx="18" fill="url(#sPage)" stroke="#e6d6b4" stroke-width="2"/>
+      <rect x="150" y="112" width="206" height="286" rx="20" fill="url(#sCover)"/>
+      <path d="M150 150 Q150 112 188 112 L300 112 Q200 150 170 280 Q150 220 150 150 Z" fill="#ffffff" opacity="0.12"/>
+      <g stroke="#8a4a12" stroke-width="9" stroke-linecap="round" fill="none" opacity="0.92">
+        <path d="M150 146 q-26 -8 -8 -26"/><path d="M150 192 q-26 -8 -8 -26"/>
+        <path d="M150 238 q-26 -8 -8 -26"/><path d="M150 284 q-26 -8 -8 -26"/>
+        <path d="M150 330 q-26 -8 -8 -26"/>
+      </g>
+      <rect x="196" y="186" width="118" height="86" rx="12" fill="#fff5e2" opacity="0.95"/>
+      <rect x="212" y="208" width="86" height="11" rx="5.5" fill="#e07414"/>
+      <rect x="212" y="230" width="64" height="9" rx="4.5" fill="#f3aa55"/>
+      <rect x="212" y="248" width="74" height="9" rx="4.5" fill="#f3aa55"/>
+      <path d="M324 112 h26 v118 l-13 -16 -13 16 Z" fill="#c2410c"/>
+    </g>
+    <g stroke="#e7c98c" stroke-width="2" fill="url(#sGrain)">
+      <ellipse cx="300" cy="372" rx="20" ry="9" transform="rotate(28 300 372)"/>
+      <ellipse cx="346" cy="392" rx="20" ry="9" transform="rotate(-14 346 392)"/>
+      <ellipse cx="270" cy="398" rx="20" ry="9" transform="rotate(8 270 398)"/>
+      <ellipse cx="332" cy="356" rx="19" ry="8.5" transform="rotate(52 332 356)"/>
+      <ellipse cx="378" cy="368" rx="19" ry="8.5" transform="rotate(-36 378 368)"/>
+      <ellipse cx="222" cy="372" rx="18" ry="8" transform="rotate(-22 222 372)"/>
+      <ellipse cx="362" cy="328" rx="17" ry="8" transform="rotate(40 362 328)"/>
+    </g>
+  </svg>
+  <div class="word">Sổ gạo</div>
+  <div class="tag">Ghi điểm cho 4 người</div>
+  <div class="dots"><i></i><i></i><i></i></div>
+</div>
+<div id="app">
+  <header class="page-head">
+    <div class="head-row">
+      <div class="brand"><span class="chip"></span>Sổ gạo</div>
+      <div class="head-spacer"></div>
+      <button class="icon-btn" id="btnNames">✎ Tên</button>
+    </div>
+    <div class="page-name" id="pageName"></div>
+    <div class="players" id="players"></div>
+  </header>
+
+  <main id="board"></main>
+
+  <nav class="menu">
+    <button id="mNewPage">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2Z"/><path d="M12 11v6M9 14h6"/></svg>
+      Trang mới
+    </button>
+    <button id="mNewTable">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+      Bảng mới
+    </button>
+    <button id="mNewRow" class="primary">
+      <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></span>
+      Dòng mới
+    </button>
+    <button id="mTotal">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16M4 5l7 7-7 7h16"/></svg>
+      Tổng điểm
+    </button>
+    <button id="mHistory">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l4 2"/></svg>
+      Lịch sử
+    </button>
+  </nav>
+</div>
+
+<div class="scrim" id="scrim"><div class="sheet" id="sheet"></div></div>
+<div id="toast"></div>
+
+<script>
+"use strict";
+(function(){
+  const KEY = "sodiem_v1";
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const clampScore = n => Math.max(-999, Math.min(999, n|0));
+  const clampCoef  = n => Math.max(1, Math.min(999, n|0));
+  const fmtDate = ts => { const d=new Date(ts);
+    return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;};
+
+  let state = { pages: [], currentId: null, activeTable: {} }; // activeTable: pageId -> tableId
+
+  /* ---------- persistence ---------- */
+  function load(){
+    try{ const raw = localStorage.getItem(KEY); if(raw) state = JSON.parse(raw); }
+    catch(e){ console.warn("load fail", e); }
+    if(!state.pages) state.pages = [];
+    if(!state.activeTable) state.activeTable = {};
+  }
+  function save(){
+    try{ localStorage.setItem(KEY, JSON.stringify(state)); }
+    catch(e){ toast("Không lưu được dữ liệu"); }
+  }
+
+  /* ---------- helpers ---------- */
+  const curPage = () => state.pages.find(p => p.id === state.currentId) || null;
+  function activeTableOf(page){
+    if(!page || !page.tables.length) return null;
+    const id = state.activeTable[page.id];
+    return page.tables.find(t=>t.id===id) || page.tables[page.tables.length-1];
+  }
+  function setActive(page, tableId){ state.activeTable[page.id]=tableId; }
+
+  function tableTotals(table){
+    const t=[0,0,0,0];
+    table.rows.forEach(r=>{ for(let i=0;i<4;i++) t[i]+=r.scores[i]*r.coef; });
+    return t;
+  }
+  function pageTotals(page){
+    const t=[0,0,0,0];
+    page.tables.forEach(tb=>{ const tt=tableTotals(tb); for(let i=0;i<4;i++) t[i]+=tt[i]; });
+    return t;
+  }
+
+  /* ---------- toast ---------- */
+  let toastTimer;
+  function toast(msg){
+    const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show');
+    clearTimeout(toastTimer); toastTimer=setTimeout(()=>el.classList.remove('show'),1800);
+  }
+
+  /* ---------- modal ---------- */
+  const scrim=document.getElementById('scrim'), sheet=document.getElementById('sheet');
+  function openSheet(html){ sheet.innerHTML=html; scrim.classList.add('show'); }
+  function closeSheet(){ scrim.classList.remove('show'); }
+  scrim.addEventListener('click', e=>{ if(e.target===scrim) closeSheet(); });
+
+  /* ---------- value class ---------- */
+  const vclass = v => v>0?'v-pos':(v<0?'v-neg':'v-zero');
+  const vstr   = v => v>0?('+'+v):String(v);
+
+  /* ---------- render ---------- */
+  function render(){
+    const page=curPage();
+    const pn=document.getElementById('pageName');
+    const pl=document.getElementById('players');
+    const board=document.getElementById('board');
+
+    if(!page){
+      pn.textContent='';
+      pl.innerHTML='';
+      board.innerHTML=`<div class="empty">
+        <div class="big">🃏</div>
+        <h2>Chưa có trang nào</h2>
+        <p>Tạo một trang mới để bắt đầu ghi điểm cho 4 người chơi.</p>
+        <button class="btn primary" style="max-width:240px;margin:0 auto" onclick="ACT.newPage()">+ Tạo trang đầu tiên</button>
+      </div>`;
+      return;
+    }
+
+    pn.textContent = page.name + ' · ' + fmtDate(page.createdAt);
+    const ptot = pageTotals(page);
+    pl.innerHTML = page.players.map((nm,i)=>`
+      <div class="player">
+        <div class="pname">${esc(nm)}</div>
+        <div class="ptot ${vclass(ptot[i])}" style="color:${ptot[i]>0?'#7be0a8':ptot[i]<0?'#ff9b8e':'rgba(255,255,255,.6)'}">${vstr(ptot[i])}</div>
+      </div>`).join('');
+
+    const act = activeTableOf(page);
+    board.innerHTML = page.tables.map(tb=>renderTable(page,tb,act&&act.id===tb.id)).join('');
+  }
+
+  function renderTable(page,tb,isActive){
+    const tot=tableTotals(tb);
+    const heads = `<div class="grid-row">
+      <div class="col-head idx">#</div>
+      ${page.players.map(nm=>`<div class="col-head">${esc(nm)}</div>`).join('')}
+    </div>`;
+    const rows = tb.rows.length ? tb.rows.map((r,idx)=>{
+      const cells = r.scores.map(s=>{const v=s*r.coef;return `<div class="cell ${vclass(v)}">${vstr(v)}</div>`;}).join('');
+      const coefBadge = r.coef!==1 ? `<span class="coef">×${r.coef}</span>` : '';
+      return `<div class="erow grid-row" onclick="ACT.editRow('${tb.id}','${r.id}')">
+        <div class="cell idx">${idx+1}${coefBadge}</div>${cells}</div>`;
+    }).join('') : `<div class="no-rows">Chưa có dòng nào · bấm “Dòng mới”.</div>`;
+    const totalRow = tb.rows.length ? `<div class="grid-row trow-total">
+      <div class="cell idx">Σ</div>
+      ${tot.map(v=>`<div class="cell ${vclass(v)}">${vstr(v)}</div>`).join('')}
+    </div>` : '';
+
+    return `<div class="tcard ${tb.collapsed?'collapsed':''} ${isActive?'active':''}" data-t="${tb.id}">
+      <div class="thead" onclick="ACT.toggleTable('${tb.id}')">
+        <span class="chev"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
+        <span class="ttitle">${esc(tb.name)}</span>
+        <span class="tmeta">${tb.rows.length} dòng</span>
+        <button class="mini ghost" onclick="event.stopPropagation();ACT.renameTable('${tb.id}')">✎</button>
+        <button class="mini ghost" onclick="event.stopPropagation();ACT.deleteTable('${tb.id}')">🗑</button>
+        <button class="mini" onclick="event.stopPropagation();ACT.newRow('${tb.id}')">+</button>
+      </div>
+      <div class="tbody" style="${tb.collapsed?'display:none':''}">
+        ${heads}${rows}${totalRow}
+      </div>
+    </div>`;
+  }
+
+  /* ---------- score field builder ---------- */
+  function scoreFieldHTML(name, idx, val){
+    const sign = val<0 ? 'minus' : '';
+    const symbol = val<0 ? '−' : '+';
+    const mag = Math.abs(val||0);
+    return `<div class="score-line">
+      <span class="nm">${esc(name)}</span>
+      <div class="stepper">
+        <button type="button" class="sign ${sign}" data-sign="${val<0?'-':'+'}" onclick="ACT.flipSign(${idx})">${symbol}</button>
+        <input id="sc${idx}" inputmode="numeric" pattern="[0-9]*" value="${mag}" maxlength="3"
+               onfocus="ACT.onScoreFocus(${idx})" onblur="ACT.onScoreBlur(${idx})"
+               oninput="ACT.onScoreInput(${idx})">
+      </div>
+    </div>`;
+  }
+  // read a score field's signed value
+  window.__readScore = function(idx){
+    const inp=document.getElementById('sc'+idx);
+    const btn=inp.parentElement.querySelector('.sign');
+    let m=parseInt(inp.value,10); if(isNaN(m)) m=0; m=Math.min(999,Math.abs(m));
+    const sgn = btn.dataset.sign==='-' ? -1 : 1;
+    return clampScore(sgn*m);
+  };
+
+  /* ---------- ACTIONS ---------- */
+  const ACT = {
+    /* page */
+    newPage(){
+      const def=['Người 1','Người 2','Người 3','Người 4'];
+      openSheet(`<h3>Tạo trang mới</h3>
+        <div class="sub">Nhập tên 4 người chơi. Trang mới bắt đầu bằng một bảng trống.</div>
+        <div class="field"><label>Tên trang</label>
+          <input class="text" id="pgname" placeholder="VD: Ván tối thứ 7" value=""></div>
+        ${def.map((d,i)=>`<div class="field"><label>Người ${i+1}</label>
+          <input class="text" id="pn${i}" placeholder="${d}" maxlength="16"></div>`).join('')}
+        <div class="btn-row">
+          <button class="btn ghost" onclick="ACT.close()">Hủy</button>
+          <button class="btn primary" onclick="ACT.confirmNewPage()">Tạo trang</button>
+        </div>`);
+      setTimeout(()=>document.getElementById('pn0').focus(),200);
+    },
+    confirmNewPage(){
+      const names=[0,1,2,3].map(i=>{
+        const v=document.getElementById('pn'+i).value.trim();
+        return v || ('Người '+(i+1));
+      });
+      let pgname=document.getElementById('pgname').value.trim();
+      if(!pgname) pgname='Trang '+(state.pages.length+1);
+      const tid=uid();
+      const page={id:uid(),name:pgname,createdAt:Date.now(),players:names,
+        tables:[{id:tid,name:'Bảng 1',collapsed:false,rows:[]}]};
+      state.pages.unshift(page);
+      state.currentId=page.id;
+      setActive(page,tid);
+      save(); render(); closeSheet(); toast('Đã tạo trang mới');
+    },
+
+    editNames(){
+      const page=curPage(); if(!page){ this.newPage(); return; }
+      openSheet(`<h3>Sửa tên</h3>
+        <div class="field"><label>Tên trang</label>
+          <input class="text" id="epg" value="${esc(page.name)}" maxlength="40"></div>
+        ${page.players.map((nm,i)=>`<div class="field"><label>Người ${i+1}</label>
+          <input class="text" id="en${i}" value="${esc(nm)}" maxlength="16"></div>`).join('')}
+        <div class="btn-row">
+          <button class="btn ghost" onclick="ACT.close()">Hủy</button>
+          <button class="btn primary" onclick="ACT.confirmNames()">Lưu</button>
+        </div>`);
+    },
+    confirmNames(){
+      const page=curPage(); if(!page) return;
+      page.name=document.getElementById('epg').value.trim()||page.name;
+      for(let i=0;i<4;i++){ const v=document.getElementById('en'+i).value.trim(); page.players[i]=v||('Người '+(i+1)); }
+      save(); render(); closeSheet(); toast('Đã lưu tên');
+    },
+
+    /* table */
+    newTable(){
+      const page=curPage(); if(!page){ this.newPage(); return; }
+      const tid=uid();
+      page.tables.push({id:tid,name:'Bảng '+(page.tables.length+1),collapsed:false,rows:[]});
+      setActive(page,tid);
+      save(); render();
+      document.querySelector(`.tcard[data-t="${tid}"]`)?.scrollIntoView({behavior:'smooth',block:'center'});
+      toast('Đã thêm bảng mới');
+    },
+    renameTable(tid){
+      const page=curPage(); const tb=page.tables.find(t=>t.id===tid); if(!tb) return;
+      openSheet(`<h3>Đổi tên bảng</h3>
+        <div class="field"><label>Tên bảng</label>
+          <input class="text" id="tbn" value="${esc(tb.name)}" maxlength="30"></div>
+        <div class="btn-row">
+          <button class="btn ghost" onclick="ACT.close()">Hủy</button>
+          <button class="btn primary" onclick="ACT.confirmRenameTable('${tid}')">Lưu</button>
+        </div>`);
+      setTimeout(()=>document.getElementById('tbn').select(),200);
+    },
+    confirmRenameTable(tid){
+      const page=curPage(); const tb=page.tables.find(t=>t.id===tid); if(!tb) return;
+      tb.name=document.getElementById('tbn').value.trim()||tb.name;
+      save(); render(); closeSheet();
+    },
+    deleteTable(tid){
+      const page=curPage(); const tb=page.tables.find(t=>t.id===tid); if(!tb) return;
+      confirmBox(`Xóa “${esc(tb.name)}”?`, 'Tất cả dòng trong bảng này sẽ bị xóa.', ()=>{
+        page.tables=page.tables.filter(t=>t.id!==tid);
+        if(!page.tables.length){ // luôn giữ tối thiểu 1 bảng
+          page.tables.push({id:uid(),name:'Bảng 1',collapsed:false,rows:[]});
+        }
+        setActive(page,page.tables[page.tables.length-1].id);
+        save(); render(); toast('Đã xóa bảng');
+      });
+    },
+    toggleTable(tid){
+      const page=curPage(); const tb=page.tables.find(t=>t.id===tid); if(!tb) return;
+      tb.collapsed=!tb.collapsed; setActive(page,tid);
+      save(); render();
+    },
+
+    /* row create / edit */
+    newRow(tid){
+      const page=curPage(); if(!page){ this.newPage(); return; }
+      const tb = tid ? page.tables.find(t=>t.id===tid) : activeTableOf(page);
+      if(!tb){ toast('Hãy tạo một bảng trước'); return; }
+      setActive(page,tb.id);
+      this.rowSheet(tb, null);
+    },
+    editRow(tid,rid){
+      const page=curPage(); const tb=page.tables.find(t=>t.id===tid);
+      const r=tb.rows.find(x=>x.id===rid);
+      this.rowSheet(tb, r);
+    },
+    rowSheet(tb, row){
+      const page=curPage();
+      const isEdit=!!row;
+      const coef = row?row.coef:1;
+      const scores = row?row.scores.slice():[0,0,0,0];
+      openSheet(`<h3>${isEdit?'Sửa dòng':'Ghi điểm'} · ${esc(tb.name)}</h3>
+        <div class="coef-line">
+          <span class="nm">Hệ số</span>
+          <input id="coef" inputmode="numeric" pattern="[0-9]*" value="${coef}" maxlength="3"
+                 onfocus="ACT.onCoefFocus()" onblur="ACT.onCoefBlur()" oninput="ACT.onScoreInput()">
+        </div>
+        ${page.players.map((nm,i)=>scoreFieldHTML(nm,i,scores[i])).join('')}
+        <div class="balance" id="bal"></div>
+        <div class="btn-row">
+          ${isEdit?`<button class="btn danger" onclick="ACT.deleteRow('${tb.id}','${row.id}')">🗑</button>`:''}
+          <button class="btn ghost" onclick="ACT.close()">Hủy</button>
+          <button class="btn primary" id="okBtn" onclick="ACT.confirmRow('${tb.id}','${row?row.id:''}')">Xác nhận</button>
+        </div>`);
+      this._editScores=scores;
+      this.updateBalance();
+    },
+    flipSign(idx){
+      const btn=document.querySelector('#sc'+idx).parentElement.querySelector('.sign');
+      const neg = btn.dataset.sign!=='-';
+      btn.dataset.sign = neg?'-':'+';
+      btn.textContent = neg?'−':'+';
+      btn.classList.toggle('minus', neg);
+      this.updateBalance();
+    },
+    onScoreInput(idx){
+      if(idx!==undefined){
+        const inp=document.getElementById('sc'+idx);
+        inp.value=inp.value.replace(/[^0-9]/g,'').slice(0,3);
+      }else{
+        const c=document.getElementById('coef'); c.value=c.value.replace(/[^0-9]/g,'').slice(0,3);
+      }
+      this.updateBalance();
+    },
+    onScoreFocus(idx){
+      const inp=document.getElementById('sc'+idx);
+      if(inp.value==='0') inp.value='';
+    },
+    onScoreBlur(idx){
+      const inp=document.getElementById('sc'+idx);
+      if(inp.value==='') inp.value='0';
+      this.updateBalance();
+    },
+    onCoefFocus(){
+      const c=document.getElementById('coef');
+      if(c.value==='1') c.value='';
+    },
+    onCoefBlur(){
+      const c=document.getElementById('coef');
+      if(c.value==='') c.value='1';
+      this.updateBalance();
+    },
+    updateBalance(){
+      const s=[0,1,2,3].map(i=>window.__readScore(i));
+      const sum=s.reduce((a,b)=>a+b,0);
+      const bal=document.getElementById('bal');
+      const ok=document.getElementById('okBtn');
+      if(sum===0){
+        bal.className='balance ok'; bal.textContent='✓ Cân bằng (tổng = 0)';
+        ok.disabled=false;
+      }else{
+        bal.className='balance bad';
+        bal.textContent='✗ Điểm bị lệch '+(sum>0?'+':'')+sum+' · phải bằng 0';
+        ok.disabled=true;
+      }
+    },
+    confirmRow(tid,rid){
+      const page=curPage(); const tb=page.tables.find(t=>t.id===tid);
+      const scores=[0,1,2,3].map(i=>window.__readScore(i));
+      if(scores.reduce((a,b)=>a+b,0)!==0){ toast('Điểm bị lệch, không thể ghi'); return; }
+      let coef=parseInt(document.getElementById('coef').value,10); coef=clampCoef(isNaN(coef)?1:coef);
+      if(rid){
+        const r=tb.rows.find(x=>x.id===rid); r.coef=coef; r.scores=scores;
+        toast('Đã cập nhật dòng');
+      }else{
+        tb.rows.push({id:uid(),coef,scores}); toast('Đã ghi điểm');
+      }
+      save(); render(); closeSheet();
+    },
+    deleteRow(tid,rid){
+      const page=curPage(); const tb=page.tables.find(t=>t.id===tid);
+      tb.rows=tb.rows.filter(x=>x.id!==rid);
+      save(); render(); closeSheet(); toast('Đã xóa dòng');
+    },
+
+    /* totals */
+    showTotal(){
+      const page=curPage(); if(!page){ toast('Chưa có trang nào'); return; }
+      const tot=pageTotals(page);
+      const sum=tot.reduce((a,b)=>a+b,0);
+      openSheet(`<h3>Tổng điểm · ${esc(page.name)}</h3>
+        <div class="sub">Cộng tất cả ${page.tables.length} bảng trong trang.</div>
+        <div class="tot-list">
+          ${page.players.map((nm,i)=>`<div class="tot-item">
+            <div class="rk">${i+1}</div>
+            <div class="nm">${esc(nm)}</div>
+            <div class="vl ${vclass(tot[i])}" style="color:${tot[i]>0?'#1e7a4f':tot[i]<0?'#c0392b':'#b3aa94'}">${vstr(tot[i])}</div>
+          </div>`).join('')}
+        </div>
+        <div class="tot-foot">Tổng cộng cả bàn: ${vstr(sum)} ${sum===0?'(cân bằng ✓)':'(⚠ lệch)'}</div>
+        <div class="btn-row"><button class="btn primary" onclick="ACT.close()">Đóng</button></div>`);
+    },
+
+    /* history */
+    showHistory(){
+      if(!state.pages.length){ this.newPage(); return; }
+      const items=state.pages.map(p=>{
+        const rows=p.tables.reduce((a,t)=>a+t.rows.length,0);
+        const cur=p.id===state.currentId;
+        return `<div class="hist-item ${cur?'cur':''}">
+          <div class="info">
+            <div class="ht">${esc(p.name)} ${cur?'<span class="hist-cur-tag">• đang xem</span>':''}</div>
+            <div class="hs">${fmtDate(p.createdAt)} · ${p.tables.length} bảng · ${rows} dòng · ${esc(p.players.join(', '))}</div>
+          </div>
+          ${cur?'':`<button class="open" onclick="ACT.openPage('${p.id}')">Mở</button>`}
+          <button class="del" onclick="ACT.deletePage('${p.id}')">🗑</button>
+        </div>`;
+      }).join('');
+      openSheet(`<h3>Lịch sử các trang</h3>
+        <div class="hist">${items}</div>
+        <div class="backup-row">
+          <button class="btn ghost" onclick="ACT.exportData()">⬇︎ Sao lưu</button>
+          <button class="btn ghost" onclick="ACT.importData()">⬆︎ Khôi phục</button>
+        </div>`);
+    },
+    openPage(id){ state.currentId=id; save(); render(); closeSheet(); toast('Đã mở trang'); },
+    deletePage(id){
+      const p=state.pages.find(x=>x.id===id);
+      confirmBox(`Xóa “${esc(p.name)}”?`, 'Không thể hoàn tác.', ()=>{
+        state.pages=state.pages.filter(x=>x.id!==id);
+        if(state.currentId===id) state.currentId=state.pages.length?state.pages[0].id:null;
+        save(); render(); this.showHistory(); toast('Đã xóa trang');
+      });
+    },
+
+    /* backup */
+    exportData(){
+      const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
+      const a=document.createElement('a');
+      a.href=URL.createObjectURL(blob);
+      a.download='so-gao-backup-'+new Date().toISOString().slice(0,10)+'.json';
+      document.body.appendChild(a); a.click(); a.remove();
+      toast('Đã xuất file sao lưu');
+    },
+    importData(){
+      const inp=document.createElement('input'); inp.type='file'; inp.accept='.json,application/json';
+      inp.onchange=()=>{ const f=inp.files[0]; if(!f) return;
+        const rd=new FileReader();
+        rd.onload=()=>{ try{ const d=JSON.parse(rd.result);
+            if(!d.pages) throw 0;
+            confirmBox('Khôi phục dữ liệu?','Dữ liệu hiện tại sẽ bị thay thế.',()=>{
+              state=d; if(!state.activeTable) state.activeTable={};
+              if(!state.currentId&&state.pages[0]) state.currentId=state.pages[0].id;
+              save(); render(); closeSheet(); toast('Đã khôi phục');
+            });
+          }catch(e){ toast('File không hợp lệ'); }
+        };
+        rd.readAsText(f);
+      };
+      inp.click();
+    },
+
+    close(){ closeSheet(); }
+  };
+  window.ACT=ACT;
+
+  /* ---------- confirm box ---------- */
+  function confirmBox(title,msg,onYes){
+    const prev=sheet.innerHTML;
+    openSheet(`<h3>${title}</h3><div class="sub" style="margin-bottom:18px">${msg}</div>
+      <div class="btn-row">
+        <button class="btn ghost" id="cbNo">Không</button>
+        <button class="btn primary" id="cbYes" style="background:#c0392b">Xóa</button>
+      </div>`);
+    document.getElementById('cbNo').onclick=()=>{ sheet.innerHTML=prev; };
+    document.getElementById('cbYes').onclick=()=>{ onYes(); };
+  }
+
+  /* ---------- menu wiring ---------- */
+  document.getElementById('mNewPage').onclick =()=>ACT.newPage();
+  document.getElementById('mNewTable').onclick=()=>ACT.newTable();
+  document.getElementById('mNewRow').onclick  =()=>ACT.newRow();
+  document.getElementById('mTotal').onclick   =()=>ACT.showTotal();
+  document.getElementById('mHistory').onclick =()=>ACT.showHistory();
+  document.getElementById('btnNames').onclick =()=>ACT.editNames();
+
+  /* ---------- boot ---------- */
+  load();
+  if(state.pages.length && !state.currentId) state.currentId=state.pages[0].id;
+  render();
+
+  /* hide splash once ready (min display so it doesn't flash) */
+  window.addEventListener('load', ()=>{
+    const sp=document.getElementById('splash'); if(!sp) return;
+    setTimeout(()=>{ sp.classList.add('hide');
+      setTimeout(()=>sp.remove(), 500);
+    }, 1100);
+  });
+
+  /* register service worker for full offline use */
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', ()=>{
+      navigator.serviceWorker.register('sw.js').catch(()=>{});
+    });
+  }
+})();
+</script>
+</body>
+</html>
