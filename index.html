@@ -78,7 +78,7 @@
   .player .ptot{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:15px;margin-top:2px;color:rgba(255,255,255,.85);}
 
   /* ---------- Scroll body ---------- */
-  main{flex:1 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:8px 12px 16px;}
+  main{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:8px 12px 16px;}
 
   .empty{
     color:rgba(255,255,255,.85);text-align:center;margin-top:18vh;padding:0 24px;
@@ -572,8 +572,21 @@
       page.tables.push({id:tid,name:'Bảng '+(page.tables.length+1),collapsed:false,rows:[]});
       setActive(page,tid);
       save(); render();
-      document.querySelector(`.tcard[data-t="${tid}"]`)?.scrollIntoView({behavior:'smooth',block:'center'});
+      this.scrollToCard(tid);
       toast('Đã thêm bảng mới');
+    },
+    // Cuộn bảng mới vào tầm nhìn, KHÔNG cho vượt quá nội dung (tránh dư khoảng trắng dưới đáy)
+    scrollToCard(tid){
+      requestAnimationFrame(()=>{
+        const board=document.getElementById('board');
+        const card=document.querySelector(`.tcard[data-t="${tid}"]`);
+        if(!board||!card) return;
+        const max=Math.max(0, board.scrollHeight - board.clientHeight);
+        const delta=card.getBoundingClientRect().top - board.getBoundingClientRect().top;
+        let top=board.scrollTop + delta - 12;        // canh mép trên bảng, chừa 12px
+        top=Math.max(0, Math.min(top, max));          // kẹp trong [0, max]
+        board.scrollTo({top, behavior:'smooth'});
+      });
     },
     renameTable(tid){
       const page=curPage(); const tb=page.tables.find(t=>t.id===tid); if(!tb) return;
