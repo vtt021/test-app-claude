@@ -391,8 +391,8 @@
   const curPage = () => state.pages.find(p => p.id === state.currentId) || null;
   function activeTableOf(page){
     if(!page || !page.tables.length) return null;
-    const id = state.activeTable[page.id];
-    return page.tables.find(t=>t.id===id) || page.tables[page.tables.length-1];
+    // "Dòng mới" ở thanh menu luôn nhắm tới bảng mới nhất (bảng tạo sau cùng)
+    return page.tables[page.tables.length-1];
   }
   function setActive(page, tableId){ state.activeTable[page.id]=tableId; }
 
@@ -495,8 +495,10 @@
     return `<div class="score-line">
       <span class="nm">${esc(name)}</span>
       <div class="stepper">
-        <button type="button" class="sign ${sign}" data-sign="${val<0?'-':'+'}" onclick="ACT.flipSign(${idx})">${symbol}</button>
-        <input id="sc${idx}" inputmode="numeric" pattern="[0-9]*" value="${mag}" maxlength="3"
+        <button type="button" class="sign ${sign}" data-sign="${val<0?'-':'+'}" tabindex="-1"
+                onmousedown="event.preventDefault()"
+                onclick="ACT.flipSign(${idx})">${symbol}</button>
+        <input id="sc${idx}" inputmode="numeric" enterkeyhint="done" value="${mag}" maxlength="4"
                onfocus="ACT.onScoreFocus(${idx})" onblur="ACT.onScoreBlur(${idx})"
                oninput="ACT.onScoreInput(${idx})">
       </div>
@@ -640,18 +642,27 @@
       this._editScores=scores;
       this.updateBalance();
     },
-    flipSign(idx){
-      const btn=document.querySelector('#sc'+idx).parentElement.querySelector('.sign');
-      const neg = btn.dataset.sign!=='-';
+    setSign(idx, sign){
+      const inp=document.getElementById('sc'+idx); if(!inp) return;
+      const btn=inp.parentElement.querySelector('.sign');
+      const neg = sign==='-';
       btn.dataset.sign = neg?'-':'+';
       btn.textContent = neg?'−':'+';
       btn.classList.toggle('minus', neg);
+    },
+    flipSign(idx){
+      const btn=document.getElementById('sc'+idx).parentElement.querySelector('.sign');
+      this.setSign(idx, btn.dataset.sign==='-' ? '+' : '-');
       this.updateBalance();
     },
     onScoreInput(idx){
       if(idx!==undefined){
         const inp=document.getElementById('sc'+idx);
-        inp.value=inp.value.replace(/[^0-9]/g,'').slice(0,3);
+        const raw=inp.value;
+        // gõ dấu - (hoặc +) thì đổi luôn dấu hiển thị trên UI
+        if(raw.indexOf('-')!==-1) this.setSign(idx,'-');
+        else if(raw.indexOf('+')!==-1) this.setSign(idx,'+');
+        inp.value=raw.replace(/[^0-9]/g,'').slice(0,3);
       }else{
         const c=document.getElementById('coef'); c.value=c.value.replace(/[^0-9]/g,'').slice(0,3);
       }
@@ -698,7 +709,7 @@
         const r=tb.rows.find(x=>x.id===rid); r.coef=coef; r.scores=scores;
         toast('Đã cập nhật dòng');
       }else{
-        tb.rows.push({id:uid(),coef,scores}); toast('Đã ghi điểm');
+        tb.rows.push({id:uid(),coef,scores}); tb.collapsed=false; toast('Đã ghi điểm');
       }
       save(); render(); closeSheet();
     },
