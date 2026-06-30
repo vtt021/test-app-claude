@@ -893,10 +893,26 @@
     }, 1100);
   });
 
-  /* register service worker for full offline use */
+  /* register service worker + tự động cập nhật khi có bản mới */
   if('serviceWorker' in navigator){
+    const hadController = !!navigator.serviceWorker.controller;
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', ()=>{
+      if(!hadController || reloaded) return;   // bỏ qua lần cài đầu
+      reloaded = true;
+      location.reload();                       // có bản mới -> tải lại 1 lần
+    });
     window.addEventListener('load', ()=>{
-      navigator.serviceWorker.register('sw.js').catch(()=>{});
+      navigator.serviceWorker.register('sw.js').then(reg=>{
+        reg.update();                          // chủ động kiểm tra bản mới mỗi lần mở
+        // nếu phát hiện SW mới đã cài xong -> kích hoạt ngay
+        reg.addEventListener('updatefound', ()=>{
+          const nw = reg.installing;
+          if(nw) nw.addEventListener('statechange', ()=>{
+            if(nw.state==='installed' && navigator.serviceWorker.controller){ /* sẽ tự reload qua controllerchange */ }
+          });
+        });
+      }).catch(()=>{});
     });
   }
 })();

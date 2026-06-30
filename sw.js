@@ -1,5 +1,5 @@
-/* Sổ gạo - service worker (offline-first) */
-const CACHE = 'sogao-v1';
+/* Sổ gạo - service worker (cập nhật khi online, vẫn chạy offline) */
+const CACHE = 'sogao-v2';
 const ASSETS = [
   './',
   './index.html',
@@ -18,29 +18,43 @@ self.addEventListener('install', e => {
 
 self.addEventListener('activate', e => {
   e.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
-    ).then(() => self.clients.claim())
+    caches.keys()
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(() => self.clients.claim())
   );
 });
 
 self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
+
+  const isHTML = req.mode === 'navigate' ||
+                 (req.headers.get('accept') || '').includes('text/html');
+
+  if (isHTML) {
+    // Trang chính: ưu tiên mạng để luôn lấy bản mới; mất mạng thì dùng cache.
+    e.respondWith(
+      fetch(req)
+        .then(res => {
+          const copy = res.clone();
+          caches.open(CACHE).then(c => { c.put('./index.html', copy); c.put('./', res.clone()); });
+          return res;
+        })
+        .catch(() => caches.match('./index.html').then(r => r || caches.match('./')))
+    );
+    return;
+  }
+
+  // Tài nguyên tĩnh (icon, manifest): ưu tiên cache cho nhanh & chạy offline.
   e.respondWith(
-    caches.match(req, { ignoreSearch: true }).then(cached => {
-      if (cached) return cached;
-      return fetch(req).then(res => {
-        // cache same-origin successful responses for future offline use
+    caches.match(req, { ignoreSearch: true }).then(cached =>
+      cached || fetch(req).then(res => {
         if (res && res.ok && new URL(req.url).origin === self.location.origin) {
           const copy = res.clone();
           caches.open(CACHE).then(c => c.put(req, copy));
         }
         return res;
-      }).catch(() =>
-        // offline fallback: serve the app shell for navigations
-        req.mode === 'navigate' ? caches.match('./index.html') : undefined
-      );
-    })
+      })
+    )
   );
 });
